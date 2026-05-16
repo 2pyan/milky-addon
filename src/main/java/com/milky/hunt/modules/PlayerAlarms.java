@@ -1,5 +1,6 @@
 package com.milky.hunt.modules;
 
+import com.milky.hunt.Addon;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -9,13 +10,12 @@ import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
-import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.Vec3;
-import com.milky.hunt.Addon;
+import net.minecraft.network.packet.s2c.play.PlayerListS2CPacket;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.HashSet;
 import java.util.List;
@@ -25,226 +25,90 @@ public class PlayerAlarms extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgJ = settings.createGroup("Player Joining Server");
     private final SettingGroup sgRD = settings.createGroup("Player Entering Render Distance");
-    private final Setting<Boolean> renderdistance = sgGeneral.add(new BoolSetting.Builder()
-            .name("Alarm on Player in Render Distance")
-            .description("rings alarms when player enters render distance")
-            .defaultValue(true)
-            .build()
-    );
-    private final Setting<Boolean> joined = sgGeneral.add(new BoolSetting.Builder()
-            .name("Alarm on Player Joining Server")
-            .description("rings alarms when player joins server")
-            .defaultValue(true)
-            .build()
-    );
-    private final Setting<Boolean> useListJ = sgJ.add(new BoolSetting.Builder()
-            .name("Use Names List")
-            .description("Watch out for these people")
-            .defaultValue(false)
-            .visible(() -> joined.get())
-            .build()
-    );
-    private final Setting<List<String>> namesJ = sgJ.add(new StringListSetting.Builder()
-            .name("Names To Watch Out For")
-            .description("Text lines to display")
-            .defaultValue(List.of("etianl", "SheepyMcGoat"))
-            .visible(() -> joined.get() && useListJ.get())
-            .build());
-    private final Setting<Boolean> textmessage = sgRD.add(new BoolSetting.Builder()
-            .name("Text Notification")
-            .description("Puts a notification in chat about who came into render distance.")
-            .defaultValue(true)
-            .visible(() -> renderdistance.get())
-            .build()
-    );
-    private final Setting<Boolean> useListRD = sgRD.add(new BoolSetting.Builder()
-            .name("Use Names List")
-            .description("Watch out for these people")
-            .defaultValue(false)
-            .visible(() -> renderdistance.get())
-            .build()
-    );
-    private final Setting<List<String>> namesRD = sgRD.add(new StringListSetting.Builder()
-            .name("Names To Watch Out For")
-            .description("Text lines to display")
-            .defaultValue(List.of("CookieMunscher", "Adenosine94"))
-            .visible(() -> renderdistance.get() && useListRD.get())
-            .build());
-    public final Setting<Integer> amountofrings = sgJ.add(new IntSetting.Builder()
-            .name("Amount Of Rings")
-            .description("How many times the alarm will ring when someone joins.")
-            .defaultValue(5)
-            .sliderRange(1, 10)
-            .min(1)
-            .visible(() -> joined.get())
-            .build()
-    );
 
-    public final Setting<Integer> ringdelay = sgJ.add(new IntSetting.Builder()
-            .name("Delay Between Rings (ticks)")
-            .description("The delay between rings (in ticks).")
-            .defaultValue(20)
-            .sliderRange(1, 100)
-            .min(1)
-            .visible(() -> joined.get())
-            .build()
-    );
+    // --- SETTINGS ---
+    private final Setting<Boolean> renderdistance = sgGeneral.add(new BoolSetting.Builder().name("Alarm on Player in Render Distance").defaultValue(true).build());
+    private final Setting<Boolean> joined = sgGeneral.add(new BoolSetting.Builder().name("Alarm on Player Joining Server").defaultValue(true).build());
 
-    public final Setting<Double> volume = sgJ.add(new DoubleSetting.Builder()
-            .name("Volume")
-            .description("The volume of the sound.")
-            .defaultValue(1.0)
-            .sliderRange(0.0, 1.0)
-            .visible(() -> joined.get())
-            .build()
-    );
+    private final Setting<Boolean> useListJ = sgJ.add(new BoolSetting.Builder().name("Use Names List").defaultValue(false).visible(joined::get).build());
+    private final Setting<List<String>> namesJ = sgJ.add(new StringListSetting.Builder().name("Names To Watch Out For").defaultValue(List.of("etianl", "SheepyMcGoat")).visible(() -> joined.get() && useListJ.get()).build());
+    private final Setting<Integer> amountofrings = sgJ.add(new IntSetting.Builder().name("Amount Of Rings").defaultValue(5).min(1).visible(joined::get).build());
+    private final Setting<Integer> ringdelay = sgJ.add(new IntSetting.Builder().name("Delay Between Rings (ticks)").defaultValue(20).min(1).visible(joined::get).build());
+    private final Setting<Double> volume = sgJ.add(new DoubleSetting.Builder().name("Volume").defaultValue(1.0).sliderRange(0, 1).visible(joined::get).build());
+    private final Setting<Double> pitch = sgJ.add(new DoubleSetting.Builder().name("Pitch").defaultValue(1.0).sliderRange(0.5, 2.0).visible(joined::get).build());
+    private final Setting<List<SoundEvent>> soundtouse = sgJ.add(new SoundEventListSetting.Builder().name("Sound to play").defaultValue(SoundEvents.BLOCK_BELL_USE).visible(joined::get).build());
 
-    public final Setting<Double> pitch = sgJ.add(new DoubleSetting.Builder()
-            .name("Pitch")
-            .description("The pitch of the sound.")
-            .defaultValue(1.0)
-            .sliderRange(0.5, 2.0)
-            .visible(() -> joined.get())
-            .build()
-    );
+    private final Setting<Boolean> textmessage = sgRD.add(new BoolSetting.Builder().name("Text Notification").defaultValue(true).visible(renderdistance::get).build());
+    private final Setting<Boolean> useListRD = sgRD.add(new BoolSetting.Builder().name("Use Names List").defaultValue(false).visible(renderdistance::get).build());
+    private final Setting<List<String>> namesRD = sgRD.add(new StringListSetting.Builder().name("Names To Watch Out For").defaultValue(List.of("CookieMunscher")).visible(() -> renderdistance.get() && useListRD.get()).build());
+    private final Setting<Integer> amountofringsRD = sgRD.add(new IntSetting.Builder().name("Amount Of Rings").defaultValue(2).min(1).visible(renderdistance::get).build());
+    private final Setting<Integer> ringdelayRD = sgRD.add(new IntSetting.Builder().name("Delay Between Rings (ticks)").defaultValue(20).min(1).visible(renderdistance::get).build());
+    private final Setting<Double> volumeRD = sgRD.add(new DoubleSetting.Builder().name("Volume").defaultValue(1.0).sliderRange(0, 1).visible(renderdistance::get).build());
+    private final Setting<Double> pitchRD = sgRD.add(new DoubleSetting.Builder().name("Pitch").defaultValue(1.0).sliderRange(0.5, 2.0).visible(renderdistance::get).build());
+    private final Setting<List<SoundEvent>> soundtouseRD = sgRD.add(new SoundEventListSetting.Builder().name("Sound to play").defaultValue(SoundEvents.BLOCK_ANVIL_DESTROY).visible(renderdistance::get).build());
 
-    public final Setting<List<SoundEvent>> soundtouse = sgJ.add(new SoundEventListSetting.Builder()
-            .name("Sound to play (pick one)")
-            .description("The sound to play when a player joins. Just pick one.")
-            .defaultValue(SoundEvents.BELL_BLOCK)
-            .visible(() -> joined.get())
-            .build()
-    );
-    public final Setting<Integer> amountofringsRD = sgRD.add(new IntSetting.Builder()
-            .name("Amount Of Rings")
-            .description("How many times the alarm will ring when someone joins.")
-            .defaultValue(2)
-            .sliderRange(1, 10)
-            .min(1)
-            .visible(() -> renderdistance.get())
-            .build()
-    );
+    // --- VARIABLES ---
+    private Set<String> playersSpottedRD = new HashSet<>();
+    private int ticks, ringsLeft, ticksRD, ringsLeftRD;
+    private boolean ringring, ringringRD;
 
-    public final Setting<Integer> ringdelayRD = sgRD.add(new IntSetting.Builder()
-            .name("Delay Between Rings (ticks)")
-            .description("The delay between rings (in ticks).")
-            .defaultValue(20)
-            .sliderRange(1, 100)
-            .min(1)
-            .visible(() -> renderdistance.get())
-            .build()
-    );
+    public PlayerAlarms() {
+        super(Addon.MilkyModCategory, "PlayerAlarms", "Plays alarm sounds when a player joins or enters render distance.");
+    }
 
-    public final Setting<Double> volumeRD = sgRD.add(new DoubleSetting.Builder()
-            .name("Volume")
-            .description("The volume of the sound.")
-            .defaultValue(1.0)
-            .sliderRange(0.0, 1.0)
-            .visible(() -> renderdistance.get())
-            .build()
-    );
-
-    public final Setting<Double> pitchRD = sgRD.add(new DoubleSetting.Builder()
-            .name("Pitch")
-            .description("The pitch of the sound.")
-            .defaultValue(1.0)
-            .sliderRange(0.5, 2.0)
-            .visible(() -> renderdistance.get())
-            .build()
-    );
-
-    public final Setting<List<SoundEvent>> soundtouseRD = sgRD.add(new SoundEventListSetting.Builder()
-            .name("Sound to play (pick one)")
-            .description("The sound to play when a player joins. Just pick one.")
-            .defaultValue(SoundEvents.ANVIL_DESTROY)
-            .visible(() -> renderdistance.get())
-            .build()
-    );
     @Override
     public WWidget getWidget(GuiTheme theme) {
         WTable table = theme.table();
-        WButton rstplayersSpotted = table.add(theme.button("Reset Players Spotted in Render Distance")).expandX().minWidth(100).widget();
-        rstplayersSpotted.action = () -> {
-            playersSpottedRD = new HashSet<>();
-        };
-        table.row();
+        WButton rst = table.add(theme.button("Reset Players Spotted")).expandX().widget();
+        rst.action = () -> playersSpottedRD.clear();
         return table;
     }
-public PlayerAlarms() {
-    super(Addon.MilkyModCategory, "PlayerAlarms", "Plays alarm sounds when a player joins or enters render distance.");
-}
-    }
-    private Set<String> playersSpottedRD = new HashSet<>();
-    private int ticks = 0;
-    private int ringsLeft = 0;
-    private boolean ringring = false;
-    private int ticksRD = 0;
-    private int ringsLeftRD = 0;
-    private boolean ringringRD = false;
 
     @Override
     public void onActivate() {
-        playersSpottedRD = new HashSet<>();
+        playersSpottedRD.clear();
         ringring = false;
-        ticks = 0;
-        ringsLeft = 0;
         ringringRD = false;
-        ticksRD = 0;
-        ringsLeftRD = 0;
+        ticks = 0; ticksRD = 0;
+        ringsLeft = 0; ringsLeftRD = 0;
     }
 
     @EventHandler
     public void onPreTick(TickEvent.Pre event) {
-        if (mc.level == null || mc.player == null) return;
+        if (mc.world == null || mc.player == null) return;
+
+        // Logic Join Alarm
         if (ringring && ringsLeft > 0) {
             if (ticks <= 0) {
-                playSound();
+                playSound(soundtouse, volume, pitch);
                 ticks = ringdelay.get();
                 ringsLeft--;
-                if (ringsLeft <= 0) {
-                    ringring = false;
-                }
-            } else {
-                ticks--;
-            }
+                if (ringsLeft <= 0) ringring = false;
+            } else ticks--;
         }
+
+        // Logic Render Distance Alarm
         if (ringringRD && ringsLeftRD > 0) {
             if (ticksRD <= 0) {
-                playSoundRD();
+                playSound(soundtouseRD, volumeRD, pitchRD);
                 ticksRD = ringdelayRD.get();
                 ringsLeftRD--;
-                if (ringsLeftRD <= 0) {
-                    ringringRD = false;
-                }
-            } else {
-                ticksRD--;
-            }
+                if (ringsLeftRD <= 0) ringringRD = false;
+            } else ticksRD--;
         }
-        if (renderdistance.get()){
-            for (Entity entity : mc.level.entitiesForRendering()){
-                if (entity instanceof Player && entity != mc.player){
-                    Player player = (Player) entity;
-                    if (!playersSpottedRD.contains(player.getDisplayName().getString())){
-                        if (useListRD.get()){
-                            if (namesRD.get().contains(player.getDisplayName().getString())) {
-                                ringringRD = true;
-                                ringsLeftRD = amountofringsRD.get();
-                                ticksRD = 0;
-                                playersSpottedRD.add(player.getDisplayName().getString());
-                                if (textmessage.get()){
-                                    String name = player.getDisplayName().getString().replaceAll("[^a-zA-Z0-9_]", "");
-                                    error(name + " entered render distance!");
-                                }
-                            }
-                        } else {
+
+        // Check entities
+        if (renderdistance.get()) {
+            for (Entity entity : mc.world.getEntities()) {
+                if (entity instanceof PlayerEntity && entity != mc.player) {
+                    String name = entity.getDisplayName().getString();
+                    if (!playersSpottedRD.contains(name)) {
+                        if (!useListRD.get() || namesRD.get().contains(name)) {
                             ringringRD = true;
                             ringsLeftRD = amountofringsRD.get();
                             ticksRD = 0;
-                            playersSpottedRD.add(player.getDisplayName().getString());
-                            if (textmessage.get()){
-                                String name = player.getDisplayName().getString().replaceAll("[^a-zA-Z0-9_]", "");
-                                error(name + " entered render distance!");
-                            }
+                            playersSpottedRD.add(name);
+                            if (textmessage.get()) error(name.replaceAll("[^a-zA-Z0-9_]", "") + " entered render distance!");
                         }
                     }
                 }
@@ -252,47 +116,24 @@ public PlayerAlarms() {
         }
     }
 
-    private void playSound() {
-        if (mc.player != null) {
-            Vec3 pos = mc.player.position();
-            SoundEvent sound = SoundEvents.BELL_BLOCK;
-            if (!soundtouse.get().isEmpty()) sound = soundtouse.get().get(0);
-            float volumeSetting = volume.get().floatValue();
-            float pitchSetting = pitch.get().floatValue();
-
-            mc.level.playLocalSound(pos.x, pos.y, pos.z, sound, mc.player.getSoundSource(), volumeSetting, pitchSetting, false);
-        }
+    private void playSound(Setting<List<SoundEvent>> soundSetting, Setting<Double> vol, Setting<Double> pit) {
+        if (mc.player == null) return;
+        Vec3d pos = mc.player.getPos();
+        SoundEvent sound = soundSetting.get().isEmpty() ? SoundEvents.BLOCK_NOTE_BLOCK_BELL.value() : soundSetting.get().get(0);
+        mc.world.playSound(mc.player, pos.x, pos.y, pos.z, sound, mc.player.getSoundCategory(), vol.get().floatValue(), pit.get().floatValue());
     }
-    private void playSoundRD() {
-        if (mc.player != null) {
-            Vec3 pos = mc.player.position();
-            SoundEvent sound = SoundEvents.ANVIL_DESTROY;
-            if (!soundtouseRD.get().isEmpty()) sound = soundtouseRD.get().get(0);
-            float volumeSetting = volumeRD.get().floatValue();
-            float pitchSetting = pitchRD.get().floatValue();
 
-            mc.level.playLocalSound(pos.x, pos.y, pos.z, sound, mc.player.getSoundSource(), volumeSetting, pitchSetting, false);
-        }
-    }
     @EventHandler
     private void onReceivePacket(PacketEvent.Receive event) {
-        if (event.packet instanceof ClientboundPlayerInfoUpdatePacket && joined.get()) {
-            ClientboundPlayerInfoUpdatePacket packet = (ClientboundPlayerInfoUpdatePacket) event.packet;
-
-            if (packet.actions().contains(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER)) {
-                if (useListJ.get()) {
-                    for (ClientboundPlayerInfoUpdatePacket.Entry entry : packet.newEntries()) {
-                        String playerName = entry.profile().name();
-                        if (namesJ.get().contains(playerName)){
-                            ringring = true;
-                            ringsLeft = amountofrings.get();
-                            ticks = 0;
-                        }
+        if (event.packet instanceof PlayerListS2CPacket packet && joined.get()) {
+            if (packet.getActions().contains(PlayerListS2CPacket.Action.ADD_PLAYER)) {
+                for (PlayerListS2CPacket.Entry entry : packet.getEntries()) {
+                    String name = entry.profile().getName();
+                    if (!useListJ.get() || namesJ.get().contains(name)) {
+                        ringring = true;
+                        ringsLeft = amountofrings.get();
+                        ticks = 0;
                     }
-                } else {
-                    ringring = true;
-                    ringsLeft = amountofrings.get();
-                    ticks = 0;
                 }
             }
         }
