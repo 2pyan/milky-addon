@@ -46,7 +46,6 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import pwn.noobs.trouserstreak.Trouser;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
