@@ -39,6 +39,8 @@ public class Addon extends MeteorAddon {
         Modules.get().add(new SpiralFlight());
         Modules.get().add(new Trade());
         Modules.get().add(new ValuableESP());
+        Modules.get().add(new ValuableESP());
+        Modules.get().add(new PlayerAlarms());
 
         Hud.get().register(YVelocity.INFO);
 
