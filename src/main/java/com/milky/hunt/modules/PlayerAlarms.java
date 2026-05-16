@@ -171,7 +171,7 @@ public class PlayerAlarms extends Module {
         return table;
     }
 public PlayerAlarms() {
-    super(Addon.CATEGORY, "player-alarms", "Plays alarm sounds when a player joins or enters render distance.");
+    super(Addon.MilkyModCategory, "PlayerAlarms", "Plays alarm sounds when a player joins or enters render distance.");
 }
     }
     private Set<String> playersSpottedRD = new HashSet<>();
