@@ -15,7 +15,6 @@ import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.math.Vec3d;
 
 import java.util.HashSet;
 import java.util.List;
@@ -77,7 +76,7 @@ public class PlayerAlarms extends Module {
     public void onPreTick(TickEvent.Pre event) {
         if (mc.world == null || mc.player == null) return;
 
-        // Logic Join Alarm
+        // Alarm: Player Joining
         if (ringring && ringsLeft > 0) {
             if (ticks <= 0) {
                 playSound(soundtouse, volume, pitch);
@@ -87,7 +86,7 @@ public class PlayerAlarms extends Module {
             } else ticks--;
         }
 
-        // Logic Render Distance Alarm
+        // Alarm: Render Distance
         if (ringringRD && ringsLeftRD > 0) {
             if (ticksRD <= 0) {
                 playSound(soundtouseRD, volumeRD, pitchRD);
@@ -97,7 +96,7 @@ public class PlayerAlarms extends Module {
             } else ticksRD--;
         }
 
-        // Check entities
+        // Check render distance entities
         if (renderdistance.get()) {
             for (Entity entity : mc.world.getEntities()) {
                 if (entity instanceof PlayerEntity && entity != mc.player) {
@@ -108,7 +107,7 @@ public class PlayerAlarms extends Module {
                             ringsLeftRD = amountofringsRD.get();
                             ticksRD = 0;
                             playersSpottedRD.add(name);
-                            if (textmessage.get()) error(name.replaceAll("[^a-zA-Z0-9_]", "") + " entered render distance!");
+                            if (textmessage.get()) error(name.replaceAll("[^a-zA-Z0-9_]", "") + " est apparu !");
                         }
                     }
                 }
@@ -118,16 +117,21 @@ public class PlayerAlarms extends Module {
 
     private void playSound(Setting<List<SoundEvent>> soundSetting, Setting<Double> vol, Setting<Double> pit) {
         if (mc.player == null) return;
-        Vec3d pos = mc.player.getPos();
-        SoundEvent sound = soundSetting.get().isEmpty() ? SoundEvents.BLOCK_NOTE_BLOCK_BELL.value() : soundSetting.get().get(0);
-        mc.world.playSound(mc.player, pos.x, pos.y, pos.z, sound, mc.player.getSoundCategory(), vol.get().floatValue(), pit.get().floatValue());
+        
+        SoundEvent sound = soundSetting.get().isEmpty() 
+            ? SoundEvents.BLOCK_NOTE_BLOCK_BELL 
+            : soundSetting.get().get(0);
+
+        mc.player.playSound(sound, vol.get().floatValue(), pit.get().floatValue());
     }
 
     @EventHandler
     private void onReceivePacket(PacketEvent.Receive event) {
         if (event.packet instanceof PlayerListS2CPacket packet && joined.get()) {
+            // Vérification de l'action ADD_PLAYER de manière compatible
             if (packet.getActions().contains(PlayerListS2CPacket.Action.ADD_PLAYER)) {
                 for (PlayerListS2CPacket.Entry entry : packet.getEntries()) {
+                    if (entry.profile() == null) continue;
                     String name = entry.profile().getName();
                     if (!useListJ.get() || namesJ.get().contains(name)) {
                         ringring = true;
