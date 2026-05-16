@@ -170,8 +170,9 @@ public class PlayerAlarms extends Module {
         table.row();
         return table;
     }
-    public PlayerAlarms() {
-        super(Trouser.Main, "PlayerAlarms", "Plays an alarm sounds when a player joins or is now in render distance.");
+public PlayerAlarms() {
+    super(Addon.CATEGORY, "player-alarms", "Plays alarm sounds when a player joins or enters render distance.");
+}
     }
     private Set<String> playersSpottedRD = new HashSet<>();
     private int ticks = 0;
